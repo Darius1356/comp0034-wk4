@@ -1,6 +1,7 @@
-from flask import current_app as app, request, make_response
+from flask import current_app as app, request, make_response, abort, jsonify
+from sqlalchemy.exc import SQLAlchemyError
 from marshmallow import ValidationError
-
+from marshmallow.exceptions import ValidationError
 from paralympics import db
 from paralympics.models import Region, Event
 from paralympics.schemas import RegionSchema, EventSchema
@@ -34,12 +35,14 @@ def get_region(code):
     :param type code: str
     :returns: JSON
     """
-    # Query structure shown at https://flask-sqlalchemy.palletsprojects.com/en/3.1.x/queries/#select
-    region = db.session.execute(db.select(Region).filter_by(NOC=code)).scalar_one()
-    # Dump the data using the Marshmallow region schema; '.dump()' returns JSON.
-    result = region_schema.dump(region)
-    # Return the data in the HTTP response
-    return result
+    try:
+        region = db.session.execute(db.select(Region).filter_by(NOC=code)).scalar_one()
+        result = region_schema.dump(region)
+        return result
+        # Query structure shown at https://flask-sqlalchemy.palletsprojects.com/en/3.1.x/queries/#select
+    except SQLAlchemyError as e:
+        # See https://flask.palletsprojects.com/en/2.3.x/errorhandling/#returning-api-errors-as-json
+        abort(404, description="Region not found.")
 
 
 @app.get("/events")
@@ -198,3 +201,26 @@ def region_update(noc_code):
     db.session.commit()
 
     return {"message": f"Region {noc_code} updated"}
+
+@app.errorhandler(404)
+def resource_not_found(e):
+    """ Error handler for 404.
+
+        Args:
+            HTTP 404 error
+        Returns:
+            JSON response with the validation error message and the 404 status code
+        """
+    return jsonify(error=str(e)), 404
+
+@app.errorhandler(ValidationError)
+def register_validation_error(error):
+    """ Error handler for marshmallow schema validation errors.
+
+    Args:
+        error (ValidationError): Marshmallow error.
+    Returns:
+        HTTP response with the validation error message and the 400 status code
+    """
+    response = error.messages
+    return response, 400
