@@ -63,10 +63,13 @@ def get_event(event_id):
     :param event_id: The id of the event to return
     :param type event_id: int
     :returns: JSON"""
-    event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
-    result = event_schema.dump(event)
-    return result
-
+    try:
+        event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
+        result = event_schema.dump(event)
+        return result
+    except SQLAlchemyError as e:
+        # See https://flask.palletsprojects.com/en/2.3.x/errorhandling/#returning-api-errors-as-json
+        abort(404, description="Region not found.")
 
 @app.post('/events')
 def add_event():
@@ -123,7 +126,6 @@ def delete_region(noc_code):
     db.session.commit()
     return {"message": f"Region {noc_code} deleted"}
 
-
 @app.patch("/events/<event_id>")
 def event_update(event_id):
     """
@@ -132,7 +134,7 @@ def event_update(event_id):
     """
     # Find the event in the database
     existing_event = db.session.execute(
-        db.select(Event).filter_by(event_id=event_id)
+        db.select(Event).filter_by(id=event_id)
     ).scalar_one_or_none()
     # Get the updated details from the json sent in the HTTP patch request
     event_json = request.get_json()
@@ -143,12 +145,12 @@ def event_update(event_id):
     db.session.commit()
     # Return json showing the updated record
     updated_event = db.session.execute(
-        db.select(Event).filter_by(event_id=event_id)
+        db.select(Event).filter_by(id=event_id)
     ).scalar_one_or_none()
     result = event_schema.jsonify(updated_event)
     response = make_response(result, 200)
     response.headers["Content-Type"] = "application/json"
-    return response
+    return {"message": f"Event {event_id} updated"}
 
 
 @app.route("/regions/<noc_code>", methods=['PUT', 'PATCH'])
@@ -224,3 +226,4 @@ def register_validation_error(error):
     """
     response = error.messages
     return response, 400
+

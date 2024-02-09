@@ -4,8 +4,8 @@ import pytest
 from paralympics import create_app
 from sqlalchemy import exists
 from paralympics import db
-from paralympics.models import Region
-from paralympics.schemas import RegionSchema
+from paralympics.models import Region, Event
+from paralympics.schemas import RegionSchema, EventSchema
 
 
 @pytest.fixture(scope='module')
@@ -58,4 +58,27 @@ def new_region(app):
         region_exists = db.session.query(exists().where(Region.NOC == 'NEW')).scalar()
         if region_exists:
             db.session.delete(new_region)
+            db.session.commit()
+
+@pytest.fixture(scope='function')
+def new_event(app):
+    """Create a new region and add to the database.
+
+    Adds a new Region to the database and also returns an instance of that Region object.
+    """
+    new_event_json = {'NOC': 'ITA', 'countries': '23', 'country': 'Italy', 'disabilities_included': 'Spinal injury', 'duration': 7, 'end': '25/09/1960', 'events': 113, 'highlights': 'First Games with a disability held in same venues as Olympic Games', 'host': 'Rome', 'id': 33, 'participants': 209, 'participants_f': None, 'participants_m': None, 'region': 'ITA', 'sports': 8, 'start': '18/09/1960', 'type': 'summer', 'year': 1960}
+
+    with app.app_context():
+        event_schema = EventSchema()
+        new_event = event_schema.load(new_event_json)
+        db.session.add(new_event)
+        db.session.commit()
+
+    yield new_event_json
+
+    # Remove the region from the database at the end of the test if it still exists
+    with app.app_context():
+        event_exists = db.session.query(exists().where(Event.id == '33')).scalar()
+        if event_exists:
+            db.session.delete(new_event)
             db.session.commit()
